@@ -1,0 +1,101 @@
+esphome:
+  name: office-fan
+  platform: ESP32
+  board: esp32cam
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+ota:
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  manual_ip:
+    static_ip: 192.168.99.10
+    gateway: 192.168.99.1
+    subnet: 255.255.255.0
+
+captive_portal:
+
+web_server:
+  port: 80
+
+# Outputs
+output:
+  - platform: gpio
+    pin: GPIO4
+    id: led_output
+  - platform: ledc
+    id: servo_pan_output
+    pin: GPIO12
+    frequency: 50 Hz
+    channel: 2
+  - platform: ledc
+    id: servo_tilt_output
+    pin: GPIO13
+    frequency: 50 Hz
+    channel: 3
+
+# Camera
+esp32_camera:
+  idle_framerate: 1 fps
+  max_framerate: 60 fps
+  external_clock:
+    pin: GPIO0
+    frequency: 20MHz
+  i2c_pins:
+    sda: GPIO26
+    scl: GPIO27
+  data_pins: [GPIO5, GPIO18, GPIO19, GPIO21, GPIO36, GPIO39, GPIO34, GPIO35]
+  vsync_pin: GPIO25
+  href_pin: GPIO23
+  pixel_clock_pin: GPIO22
+  power_down_pin: GPIO32
+  name: Office fan camera
+
+# Light
+light:
+  - platform: binary
+    output: led_output
+    name: Office fan light
+
+# Servos
+servo:
+  - id: servo_pan
+    output: servo_pan_output
+    restore: true
+    transition_length: 5s
+  - id: servo_tilt
+    output: servo_tilt_output
+    restore: true
+    transition_length: 5s
+
+number:
+  - platform: template
+    name: Office fan pan
+    min_value: -100
+    max_value: 100
+    step: 1
+    restore_value: true
+    set_action:
+      then:
+        - servo.write:
+            id: servo_pan
+            level: !lambda 'return x / 100.0;'
+  - platform: template
+    name: Office fan tilt
+    min_value: 30
+    max_value: 60
+    step: 1
+    restore_value: true
+    set_action:
+      then:
+        - servo.write:
+            id: servo_tilt
+            level: !lambda 'return x / 100.0;'
