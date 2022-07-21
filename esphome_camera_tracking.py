@@ -19,10 +19,12 @@ pan = None
 tilt = None
 pan_value = 0
 tilt_value = 0
+old_pan_value = 0
+old_tilt_value = 0
 last_state_update = time.time()
 
 def handle_new_state(state):
-    global last_state_update, api, pan, tilt, pan_value, tilt_value
+    global last_state_update, api, pan, tilt, pan_value, tilt_value, old_pan_value, old_tilt_value
 
     last_state_update = time.time()
 
@@ -68,8 +70,14 @@ def handle_new_state(state):
                 if tilt_value > tilt.max_value:
                     tilt_value = tilt.max_value
 
-                asyncio.get_event_loop().create_task(api.number_command(pan.key, pan_value))
-                asyncio.get_event_loop().create_task(api.number_command(tilt.key, tilt_value))
+                if pan_value != old_pan_value:
+                    old_pan_value = pan_value
+                    asyncio.get_event_loop().create_task(api.number_command(pan.key, pan_value))
+
+                if tilt_value != old_tilt_value:
+                    old_tilt_value = tilt_value
+                    asyncio.get_event_loop().create_task(api.number_command(tilt.key, tilt_value))
+
                 print("Pan {} Tilt {}".format(pan_value, tilt_value))
         except Exception as e:
             print(e)
@@ -85,14 +93,23 @@ async def main():
 
     entities = await api.list_entities_services()
 
+    led = None
+
     for entity in entities[0]:
         if entity.object_id == os.environ.get("PAN_ENTITY"):
             pan = entity
         if entity.object_id == os.environ.get("TILT_ENTITY"):
             tilt = entity
+        if type(entity) == aioesphomeapi.LightInfo:
+            led = entity
 
     if not pan or not tilt:
         raise ValueError("pan or tilt entity not found, check PAN_ENTITY and TILT_ENTITY config")
+
+    if led:
+        await api.light_command(led.key, True)
+        await asyncio.sleep(0.05)
+        await api.light_command(led.key, False)
 
     await api.subscribe_states(handle_new_state)
 
