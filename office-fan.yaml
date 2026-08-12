@@ -1,7 +1,10 @@
 esphome:
   name: office-fan
-  platform: ESP32
+
+esp32:
   board: esp32cam
+  framework:
+    type: arduino
 
 # Enable logging
 logger:
@@ -10,42 +13,34 @@ logger:
 api:
 
 ota:
-  password: !secret ota_password
+  - platform: esphome
+    password: "4e3e3ff980955ffe9ccffe39ac2e84f6"
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-
+  
   manual_ip:
-    static_ip: 192.168.99.10
+    static_ip: 192.168.99.14
     gateway: 192.168.99.1
     subnet: 255.255.255.0
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Office Fan Fallback Hotspot"
+    password: "flA6dWdyrvTv"
 
 captive_portal:
 
 web_server:
   port: 80
 
-# Outputs
-output:
-  - platform: gpio
-    pin: GPIO4
-    id: led_output
-  - platform: ledc
-    id: servo_pan_output
-    pin: GPIO12
-    frequency: 50 Hz
-    channel: 2
-  - platform: ledc
-    id: servo_tilt_output
-    pin: GPIO13
-    frequency: 50 Hz
-    channel: 3
+psram:
 
 # Camera
 esp32_camera:
   idle_framerate: 1 fps
-  max_framerate: 60 fps
+  max_framerate: 5 fps
   external_clock:
     pin: GPIO0
     frequency: 20MHz
@@ -59,22 +54,48 @@ esp32_camera:
   power_down_pin: GPIO32
   name: Office fan camera
 
+# Outputs
+output:
+  - platform: gpio
+    pin: GPIO4
+    id: led_output
+  - platform: ledc
+    id: fan_output
+    pin: GPIO12
+    frequency: 25000 Hz
+    channel: 4
+  - platform: ledc
+    id: servo_tilt_output
+    pin: GPIO13
+    frequency: 50 Hz
+    channel: 3
+    
 # Light
 light:
   - platform: binary
     output: led_output
     name: Office fan light
 
+stepper:
+  - platform: a4988
+    id: stepper_pan
+    step_pin: GPIO15
+    dir_pin: GPIO14
+    max_speed: 250 steps/s
+    acceleration: 50
+    deceleration: 50
+
 # Servos
 servo:
-  - id: servo_pan
-    output: servo_pan_output
-    restore: true
-    transition_length: 5s
   - id: servo_tilt
     output: servo_tilt_output
     restore: true
-    transition_length: 5s
+    transition_length: 0.1s
+
+fan:
+  - platform: speed
+    output: fan_output
+    name: "Office fan"
 
 number:
   - platform: template
@@ -83,19 +104,26 @@ number:
     max_value: 100
     step: 1
     restore_value: true
+    initial_value: 0
+    # Publish commanded values back to the API, otherwise clients that
+    # reconnect only ever see the state published at boot
+    optimistic: true
     set_action:
       then:
-        - servo.write:
-            id: servo_pan
-            level: !lambda 'return x / 100.0;'
+        - stepper.set_target:
+            id: stepper_pan
+            target: !lambda 'return x;'
   - platform: template
     name: Office fan tilt
-    min_value: 30
-    max_value: 60
+    min_value: -100
+    max_value: 100
     step: 1
     restore_value: true
+    initial_value: 0
+    optimistic: true
     set_action:
       then:
         - servo.write:
             id: servo_tilt
             level: !lambda 'return x / 100.0;'
+
