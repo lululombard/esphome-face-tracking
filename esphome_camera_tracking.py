@@ -54,7 +54,7 @@ def handle_new_state(state):
                 x_offset_percent = x_offset * 100 // (image.shape[1] // 2)
                 y_offset_percent = y_offset * 100 // (image.shape[0] // 2)
 
-                pan_value -= x_offset_percent // 10
+                pan_value -= x_offset_percent // 5
 
                 tilt_value += y_offset_percent // 15
 
@@ -88,17 +88,29 @@ async def main():
     api = aioesphomeapi.APIClient(os.environ.get("ESP_IP"), int(os.environ.get("ESP_PORT")), '')
 
     print("Connecting to ESPHome API...")
-    await api.connect(login=True)
+    await api.connect(login=False)
+
+    # ESPHome >=2026 removed API passwords and the ConnectRequest login
+    # handshake, so only log in on older firmware
+    info = await api.device_info()
+    if int(info.esphome_version.split(".")[0]) >= 2026:
+        api._connection._is_authenticated = True
+    else:
+        await api._connection.login()
     print("Connected to ESPHome API")
 
     entities = await api.list_entities_services()
 
     led = None
 
+    def entity_id(entity):
+        # ESPHome >=2026 no longer sends object_id over the API; derive it from the name
+        return entity.object_id or entity.name.lower().replace(" ", "_")
+
     for entity in entities[0]:
-        if entity.object_id == os.environ.get("PAN_ENTITY"):
+        if entity_id(entity) == os.environ.get("PAN_ENTITY"):
             pan = entity
-        if entity.object_id == os.environ.get("TILT_ENTITY"):
+        if entity_id(entity) == os.environ.get("TILT_ENTITY"):
             tilt = entity
         if type(entity) == aioesphomeapi.LightInfo:
             led = entity
