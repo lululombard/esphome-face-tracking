@@ -119,9 +119,12 @@ async def main():
         raise ValueError("pan or tilt entity not found, check PAN_ENTITY and TILT_ENTITY config")
 
     if led:
-        await api.light_command(led.key, True)
-        await asyncio.sleep(0.05)
-        await api.light_command(led.key, False)
+        # Blink at 10% brightness as the (re)connect indicator; explicit zero
+        # transition because the light is dimmable now and its default 1s fade
+        # would swallow a short blink
+        await api.light_command(led.key, True, brightness=0.1, transition_length=0.0)
+        await asyncio.sleep(0.3)
+        await api.light_command(led.key, False, transition_length=0.0)
 
     await api.subscribe_states(handle_new_state)
 
